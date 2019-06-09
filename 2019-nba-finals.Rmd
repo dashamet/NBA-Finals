@@ -15,4 +15,46 @@ runner_ups = read_csv("runnerupsdata.csv") %>%
   mutate(Champ = 0)
 
 data = rbind(champs, runner_ups)
+data$Team = str_replace(data$Team, "'Heat'", "Heat")
+data$Team = str_replace(data$Team, "'Warriors'", "Warriorrs")
+data[187,1] = str_replace(data[187,1], "2012", "2013") 
+data[24,4] = str_replace(data[24,4], "0", "1")
+
+east = c("Hawks", "Celtics", "Hornets", "Bulls", "Cavaliers", 
+         "Pistons", "Pacers", "Heat", "Bucks", "Nets", 
+         "Knicks", "Magic", "76ers", "Raptors", "Wizards")
+west = c("Mavericks", "Nuggets", "Warriors", "Rockets", "Clippers",
+         "Lakers", "Grizzlies", "Timberwolves", "Pelicans", "Thunder",
+         "Suns", "Blazers", "Kings", "Spurs", "Jazz")
+
+data = data %>% 
+  mutate(Year = as.numeric(Year),
+         Win = as.numeric(Win)) %>%
+  mutate(East = case_when(Team %in% east ~ 1,
+                          TRUE ~ 0))
+```
+
+Number of games played: 
+```{r}
+data %>% 
+  filter(Champ == 1) %>%
+  count(Game) %>% 
+  slice(4:7) %>%
+  mutate(pct = round(n/sum(n) * 100))
+```
+
+East vs. West champs:
+```{r}
+data %>%
+  filter(Champ == 1 & Game == 1) %>%
+  summarize(east_champs = sum(East == 1),
+            west_champs = sum(East == 0))
+```
+
+Homecourt advantage:
+```{r}
+data %>%
+  filter(Champ == 1) %>%
+  group_by(Home) %>%
+  count(Win)
 ```
