@@ -1,0 +1,18 @@
+---
+title: "2019 NBA Finals"
+output: html_notebook
+---
+
+```{r setup}
+library(tidyverse)
+library(readr)
+```
+
+```{r}
+champs = read_csv("championsdata.csv") %>%
+  mutate(Champ = 1)
+runner_ups = read_csv("runnerupsdata.csv") %>%
+  mutate(Champ = 0)
+
+data = rbind(champs, runner_ups)
+```
