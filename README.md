@@ -6,4 +6,4 @@
 
 * `2019-nba-finals.Rmd` contains my code for the visualizations. It produces the HTML file `2019-nba-finals.html`. 
 
-Read the post I wrote [here](www.google.com).
+Read the post I wrote [here](https://medium.com/@dasha.metropolitansky/nba-finals-a07052aae9af).
