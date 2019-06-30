@@ -1,24 +1,44 @@
 ---
 title: "2019 NBA Finals"
-output: html_notebook
+author: "Dasha Metropolitansky"
+output:
+  html_document:
+    df_print: paged
 ---
 
-```{r setup}
+### Loading packages
+```{r, setup, results = "hide", message = FALSE, warning = FALSE}
 library(tidyverse)
 library(readr)
+library(readxl)
+library(scales)
+library(gt)
 ```
 
-```{r}
+### Preparing the data
+```{r message = FALSE, warning = FALSE}
+
+# Reading in the champion and runner up teams data; creating a variable that
+# indicates if the team was a champion or not
+
 champs = read_csv("championsdata.csv") %>%
   mutate(Champ = 1)
 runner_ups = read_csv("runnerupsdata.csv") %>%
   mutate(Champ = 0)
 
+# Binding the champion and runner up teams data into one dataset
+
 data = rbind(champs, runner_ups)
+
+# Fixing inaccuracies in the data
+
 data$Team = str_replace(data$Team, "'Heat'", "Heat")
-data$Team = str_replace(data$Team, "'Warriors'", "Warriorrs")
+data$Team = str_replace(data$Team, "Warriorrs", "Warriors")
 data[187,1] = str_replace(data[187,1], "2012", "2013") 
+data[23,4] = str_replace(data[24,4], "1", "0")
 data[24,4] = str_replace(data[24,4], "0", "1")
+
+# Creating a variable that indicates if the team is from the East or West 
 
 east = c("Hawks", "Celtics", "Hornets", "Bulls", "Cavaliers", 
          "Pistons", "Pacers", "Heat", "Bucks", "Nets", 
@@ -32,29 +52,208 @@ data = data %>%
          Win = as.numeric(Win)) %>%
   mutate(East = case_when(Team %in% east ~ 1,
                           TRUE ~ 0))
+
+# Clearing the initial champion and runner up teams dataframes
+
+rm(champs, runner_ups)
 ```
 
-Number of games played: 
+### Figure 1 -- Number of games played 
 ```{r}
 data %>% 
   filter(Champ == 1) %>%
-  count(Game) %>% 
-  slice(4:7) %>%
-  mutate(pct = round(n/sum(n) * 100))
+  group_by(Year) %>%
+  summarize(games = max(Game)) %>%
+  count(games) %>%
+  mutate(pct = paste0(round(n/sum(n)*100), "%")) %>%
+  gt() %>%
+  cols_label(games = "Games in the Final", n = "Occurrences", pct = "Percent of Finals") %>%
+  cols_align("center") %>%
+  tab_style(style = cells_styles(bkgd_color = "white"),
+            locations = cells_data(rows = games == 5)) %>%
+  tab_style(style = cells_styles(bkgd_color = "white"),
+            locations = cells_data(rows = games == 7)) %>%
+  tab_style(style = cells_styles(text_weight = "bold", text_size = "large"),
+            locations = cells_data(rows = games == 6)) %>%
+  tab_options(table.border.top.color = "white",
+              column_labels.background.color = "#deebf7") %>%
+  tab_header(title = "Number of Games Played in the NBA Finals*") %>%
+  tab_source_note("* Including games from 1980 to 2019")
 ```
 
-East vs. West champs:
-```{r}
-data %>%
-  filter(Champ == 1 & Game == 1) %>%
-  summarize(east_champs = sum(East == 1),
-            west_champs = sum(East == 0))
-```
-
-Homecourt advantage:
+### Figure 2 -- Number of wins in the first 4 games 
 ```{r}
 data %>%
   filter(Champ == 1) %>%
+  group_by(Year) %>% 
+  slice(1:4) %>%    # Limit to first 4 games of every year 
+  summarize(wins = sum(Win == 1)) %>%
+  count(wins) %>%
+  mutate(pct = paste0(round(n/sum(n)*100), "%")) %>%
+  gt() %>%
+  cols_label(wins = "Wins", n = "Number of Teams", pct = "Percent of Teams") %>%
+  cols_align("center") %>%
+  tab_header(title = "NBA Champion Teams by Wins in the First 4 Games of the Finals*") %>%
+  tab_style(style = cells_styles(bkgd_color = "white"),
+            locations = cells_data(columns = vars(wins, n, pct))) %>%
+  tab_options(table.border.top.color = "white",
+              column_labels.background.color = "#deebf7") %>%
+  tab_style(style = cells_styles(text_weight = "bold", text_size = "large"),
+            locations = cells_data(rows = wins == 3)) %>%
+  tab_source_note("* Including games from 1980 to 2019")
+```
+
+### Figure 3 -- Home game advantage
+```{r}
+homecourt = data %>%
+  filter(Champ == 1) %>%
+  filter(Year != 2019) %>%
+  mutate(Home = as.factor(Home),
+         Win = as.factor(Win))
+
+# Renaming the factor levels to be more descriptive (otherwise they will be
+# represented at 0 or 1)
+
+levels(homecourt$Home) = c("Away", "Home")
+levels(homecourt$Win) = c("Loss", "Win")
+
+homecourt %>%
   group_by(Home) %>%
-  count(Win)
+  count(Win) %>%
+  ggplot(aes(x = Home, y = n, fill = Home, width = 0.85)) +
+  geom_col() +
+  geom_text(aes(label = n),
+            position = position_stack(vjust = .5),
+            size = 4.5,
+            colour = "white") +
+  facet_wrap(~Win) + 
+  labs(x = "",
+       y = "Number of Games",
+       title = "NBA Champion Team Performance in Home & Away Games",
+       subtitle = "Including games from 1980 to 2018") +
+  theme_classic() +
+  theme(plot.title = element_text(size = 16),
+        panel.grid.major=element_blank(),
+        panel.grid.minor=element_blank(),
+        strip.text = element_text(size=14),
+        legend.position = "none",
+        text = element_text(size=14),
+        axis.title.y = element_text(margin = margin(t = 0, r = 15, b = 0, l = 0), 
+                                    size = 12)) +
+  scale_fill_manual(values=c("gray30", "#006bb8"), breaks=c("Away", "Home"))
+  
+```
+
+### Figure 4 -- The 4 factors
+
+NOTE: I calculated the stats using formulas from [basketball-reference.com](https://www.basketball-reference.com/about/factors.html)
+
+```{r}
+data %>%
+  filter(Year == 2019) %>%
+  group_by(Game) %>%
+  mutate(TotalORB = sum(ORB),
+         TotalDRB = sum(DRB)) %>%
+  ungroup() %>%
+  group_by(Team) %>%
+  summarize(Shooting = round((sum(FG) + (0.5 * sum(TP)))/sum(FGA),3),
+            Turnovers = round(sum(TOV)/(sum(FGA) + (0.44 * sum(FTA) + sum(TOV))),3),
+            `Free throws` = round(sum(FT)/sum(FGA),3),
+            Offensive = round(sum(ORB)/sum(ORB + TotalDRB - DRB),3),
+            Defensive = round(sum(DRB)/sum(DRB + TotalORB - ORB),3)) %>%
+  gt() %>%
+  cols_label(Team = "") %>%
+  tab_spanner(label = "Rebounding", columns = vars(Offensive, Defensive)) %>%
+  tab_header(title = "2019 NBA Finals: The Four Factors") %>%
+  tab_style(style = cells_styles(bkgd_color = "white"),
+            locations = cells_data(rows = Team == "Warriors")) %>%
+  tab_options(table.border.top.color = "white",
+              column_labels.background.color = "#deebf7") %>%
+  cols_align("center")
+```
+
+### Figure 5 -- Free throw percentage
+
+NOTE: I'm calculating FTP by dividing the total number of free throws made by the total number of free throws attempted in all games. This is how [ESPN](https://www.espn.com/nba/team/stats/_/name/gs/split/28) calculates their team statistics.
+
+```{r}
+x = data %>%
+  group_by(Year, Team) %>%
+  summarize(FTP = sum(FT)/sum(FTA)) %>%
+  arrange(desc(FTP)) 
+
+# Assigning a numeric index for each row (representing its rank, since the list
+# is ordered)
+
+x$rank = seq.int(nrow(x))
+
+x %>%
+  filter(Team %in% c("Raptors", "Warriors")) %>%
+  unite("Team", c(Year, Team), sep = " ") %>%
+  gt() %>%
+  tab_header("Raptors vs. Warriors Free Throw Percentage in the NBA Finals") %>%
+  cols_label(FTP = "Free Throw Percentage", rank = "All Time Rank") %>%
+  fmt_percent(vars(FTP)) %>%
+  tab_style(style = cells_styles(bkgd_color = "white"),
+            locations = cells_data(columns = vars(Team, FTP, rank))) %>%
+  tab_options(table.border.top.color = "white",
+              column_labels.background.color = "#deebf7") %>%
+  tab_style(style = cells_styles(text_weight = "bold", text_size = "large"),
+            locations = cells_data(rows = rank == 1)) %>%
+  tab_style(style = cells_styles(text_weight = "bold", text_size = "large"),
+            locations = cells_data(rows = rank == 11)) %>%
+  cols_align("center")
+```
+
+### Figure 6 -- Point breakdown of the 2019 finals teams
+
+NOTE: This figure is not included in my post. 
+
+```{r}
+data %>%
+  filter(Year == 2019) %>%
+  group_by(Game) %>%
+  group_by(Team) %>%
+  summarize(prop_FG = paste0(round((sum(FG) - sum(TP))*2/sum(PTS)*100), "%"),
+            prop_TP = paste0(round(sum(TP)*3/sum(PTS)*100), "%"),
+            prop_FT = paste0(round(sum(FT)/sum(PTS)*100), "%"),
+            points = sum(PTS)) %>%
+  gt() %>%
+  cols_label(Team = "", prop_FG = "2-Point Field Goals", prop_TP = "3-Point Field Goals", prop_FT = "Free Throws", points = "Points") %>%
+  cols_align("center") %>%
+  tab_header(title = "Point Breakdown of the 2019 NBA Finals Teams") %>%
+  tab_style(style = cells_styles(bkgd_color = "white"),
+            locations = cells_data(columns = vars(prop_FG, prop_TP, prop_FT, points, Team))) %>%
+  tab_options(table.border.top.color = "white",
+              column_labels.background.color = "#deebf7")
+  
+```
+
+### Figure 7 -- Regional breakdown of NBA finals champions
+
+NOTE: This figure is not included in my post. 
+
+```{r}
+Decades = data %>%
+  filter(Champ == 1 & Game == 1) %>%
+  mutate(Decade = paste0(as.character(Year - Year %% 10), "s")) %>%
+  group_by(Decade) %>%
+  summarize(east_champs = sum(East == 1),
+            west_champs = sum(East == 0))
+
+Total = c("Total", 18, 22)
+
+rbind(Decades, Total) %>%
+  gt() %>%
+  tab_spanner(label = "Champions", columns = vars(east_champs, west_champs)) %>%
+  cols_label(east_champs = "East", west_champs = "West") %>%
+  cols_align("center") %>%
+  tab_header(title = "Champions by Region*") %>%
+  tab_style(style = cells_styles(bkgd_color = "white"),
+            locations = cells_data(columns = vars(east_champs, west_champs, Decade))) %>%
+  tab_style(style = cells_styles(bkgd_color = "#eaeaea"),
+            locations = cells_data(rows = Decade == "Total")) %>%
+  tab_options(table.border.top.color = "white",
+              column_labels.background.color = "#deebf7") %>%
+  tab_source_note("* Including games from 1980 to 2019")
 ```
